@@ -4,24 +4,12 @@
 #include <sstream>
 #include <vector>
 #include <algorithm>
+#include <iomanip>
+#include <sstream>
+
 #include "dxf.hh"
-
-struct Point {
-  float x, y;
-
-  void operator +=(const Point &p) {
-    x += p.x;
-    y += p.y;
-  }
-
-  friend std::ostream& operator<<(std::ostream &os, const Point &p) {
-    os << "(" << p.x << "," << p.y << ")";
-    return os;
-  }
-};
-
-typedef std::vector<std::vector<Point>> Polygon;
-typedef std::vector<std::pair<Point, Point>> Line;
+#include "geo.hh"
+#include "bezier.hh"
 
 struct SVG {
   float width, height;
@@ -44,7 +32,7 @@ Point parseTwoNumbers(const std::string &s) {
   std::stringstream ss(s);
   std::string num1, num2;
 
-  bool reading = true, n1 = true, n2 = false, n1n = false, n2n = false;
+  bool reading = true, n1 = true, n2 = false;
   unsigned pos = 0;
   while (reading) {
     char front = s[pos++];
@@ -54,19 +42,23 @@ Point parseTwoNumbers(const std::string &s) {
     }
 
     if (front == '-' && num1.size() == 0) {
-      n1n = true;
       num1 += front;
       continue;
     } else if (front == '-' && num2.size() == 0 && num1.size() > 0) {
-      n2 = n2n = true;
+      n2 = true;
       n1 = false;
       num2 += front;
+      continue;
+    } else if (front == '-' && num2.size() > 0) {
+      reading = false;
       continue;
     } else if (front == ',') {
       if (num2.size() > 0) {
         reading = false;
         continue;
       }
+
+      if (num1.size() == 0) continue;
 
       n1 = false;
       n2 = true;
@@ -82,7 +74,38 @@ Point parseTwoNumbers(const std::string &s) {
     }
   }
 
-  return { n1n ? -std::atof(num1.c_str()) : std::atof(num1.c_str()), n2n ? -std::atof(num2.c_str()) : std::atof(num2.c_str()) };
+  return { std::atof(num1.c_str()), std::atof(num2.c_str()) };
+}
+
+auto pairStrLength(Point p) {
+  unsigned result = 0;
+  std::stringstream stream;
+
+  // Takes a floating point number, cuts off the decimal (cast to int)
+  // casts back to a float (adding .0) then subtracts the original number
+  // to see if there's anything after the decimal.
+  bool xNeedsFraction = std::abs(((float) ((int) std::abs(p.x))) - std::abs(p.x)) > std::numeric_limits<float>::epsilon();
+  bool yNeedsFraction = std::abs(((float) ((int) std::abs(p.y))) - std::abs(p.y)) > std::numeric_limits<float>::epsilon();
+
+  if (xNeedsFraction) {
+    stream << std::fixed << std::setprecision(1) << p.x;
+  } else {
+    stream << std::fixed << std::setprecision(0) << p.x;
+  }
+
+  result += stream.str().size();
+  stream.str("");
+
+  if (yNeedsFraction) {
+    stream << std::fixed << std::setprecision(1) << p.y;
+  } else {
+    stream << std::fixed << std::setprecision(0) << p.y;
+  }
+
+  result += stream.str().size();
+
+  if (p.y > 0) result += 1;
+  return result;
 }
 
 SVG parseSVGFile(const std::string &filename) {
@@ -233,12 +256,6 @@ SVG parseSVGFile(const std::string &filename) {
         }
         break;
 
-        case 'm': {
-          Point pair = parseTwoNumbers(p);
-          current += pair;
-        }
-        break;
-
         case 'L': {
           Point pair = parseTwoNumbers(p);
           lines.push_back({
@@ -256,6 +273,31 @@ SVG parseSVGFile(const std::string &filename) {
             { current.x + pair.x, current.y + pair.y }
           });
           current += pair;
+        }
+        break;
+
+        case 'c': {
+          Point p0 = parseTwoNumbers(p);
+          auto pairLen = pairStrLength(p0);
+          p = p.substr(pairLen, std::string::npos);
+          if (p[0] == ',') p = p.substr(1, std::string::npos);
+          Point p1 = parseTwoNumbers(p);
+          pairLen = pairStrLength(p1);
+          p = p.substr(pairLen, std::string::npos);
+          if (p[0] == ',') p = p.substr(1, std::string::npos);
+          Point p2 = parseTwoNumbers(p);
+          pairLen = pairStrLength(p2);
+
+          Point end = current;
+          end += p2;
+          Point cp0 = current;
+          cp0 += p2;
+          Point cp1 = current;
+          cp1 += p2;
+          current += p2;
+
+          auto points = getBezierPoints(current, cp0, cp1, end);
+          std::cerr << "Points " << points.size() << "\n";
         }
         break;
 
@@ -284,6 +326,8 @@ int main(int argc, char **argv) {
   std::cerr << "SVG Line Count " << svg.lines.size() << "\n";
   std::cerr << "SVG Path Count " << svg.pathCount << "\n";
   std::cerr << "-------------------\n";
+
+  return 0;
 
   HEADER();
   for (auto p : svg.polygons) {
