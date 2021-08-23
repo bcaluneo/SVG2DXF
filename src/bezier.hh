@@ -10,7 +10,7 @@ auto getBezierPoints(Point start, Point cp0, Point cp1, Point end) {
   Point current;
   float t = 0.0;
   while (result.back() != end) {
-    t += .01;
+    t += 1;
     auto term1 = std::pow(1-t, 3);
     auto term2 = 3*t*std::pow(1-t, 2);
     auto term3 = 3*std::pow(t, 2)*(1-t);
@@ -28,6 +28,8 @@ auto getBezierPoints(Point start, Point cp0, Point cp1, Point end) {
     p0 += p3;
     result.push_back(p0);
   }
+
+  //19.3,-696.2
 
   return result;
 }

@@ -6,27 +6,18 @@
 #include <algorithm>
 #include <iomanip>
 #include <sstream>
+#include <map>
 
 #include "dxf.hh"
 #include "geo.hh"
 #include "bezier.hh"
+#include "parser/parser.hh"
 
-struct SVG {
-  float width, height;
-  Polygon polygons;
-  Line lines;
-  unsigned pathCount;
-};
-
-void trim(std::string &s) {
-  s.erase(s.begin(), std::find_if(s.begin(), s.end(), [](unsigned char ch) {
-    return !std::isspace(ch);
-  }));
-
-  s.erase(std::find_if(s.rbegin(), s.rend(), [](unsigned char ch) {
-    return !std::isspace(ch);
-  }).base(), s.end());
-}
+// TODO: Starting from 18 down to 498 all this code needs to find a new home
+//       that isn't in the main.cc file. The main parse function is currently
+//       moving into the parser.cc file. The structure there should be easy
+//       to follow. Everything else can probably move to the parser HEADER
+//       and class file as well.
 
 Point parseTwoNumbers(const std::string &s) {
   std::stringstream ss(s);
@@ -77,6 +68,33 @@ Point parseTwoNumbers(const std::string &s) {
   return { std::atof(num1.c_str()), std::atof(num2.c_str()) };
 }
 
+float parseOneNumber(const std::string &s) {
+  std::stringstream ss(s);
+  std::string num1;
+
+  bool reading = true;
+  unsigned pos = 0;
+  while (reading) {
+    char front = s[pos++];
+    if (std::isalpha(front)) {
+      reading = false;
+      continue;
+    }
+
+    if (front == '-' && num1.size() == 0) {
+      num1 += front;
+      continue;
+    } else if (front == '-' && num1.size() > 0) {
+      reading = false;
+      continue;
+    }
+
+    num1 += front;
+  }
+
+  return std::atof(num1.c_str());
+}
+
 auto pairStrLength(Point p) {
   unsigned result = 0;
   std::stringstream stream;
@@ -108,7 +126,8 @@ auto pairStrLength(Point p) {
   return result;
 }
 
-SVG parseSVGFile(const std::string &filename) {
+// TODO: Break this function into smaller functions and package them together into a separate file.
+SVG parseSVGFile(const std::string &filename, bool drawCurves) {
   std::ifstream infile(filename);
   std::string line;
   bool patternFound = false, largePolygonFound = false, largePathFound = false;
@@ -117,8 +136,9 @@ SVG parseSVGFile(const std::string &filename) {
   Line lines;
 
   float width = 0, height = 0;
+  bool dimensionsSet = false;
   while (std::getline(infile, line)) {
-    if (line.rfind("<pattern", 0) == 0) {
+    if (line.rfind("<pattern", 0) == 0 || line.rfind("<g id=\"Layer", 0) == 0) {
       patternFound = true;
       continue;
     }
@@ -140,9 +160,9 @@ SVG parseSVGFile(const std::string &filename) {
       }
 
       if (largePathFound) {
-        largePathFound = line.find("\"/>") == std::string::npos;
+        largePathFound = line.find("/>") == std::string::npos;
         if (!largePathFound) {
-          line.erase(line.end() - line.begin() - 3, 3);
+          line.erase(line.end() - line.begin() - 2, 2);
         }
 
         trim(line);
@@ -153,19 +173,81 @@ SVG parseSVGFile(const std::string &filename) {
 
       if (line.rfind("</pattern", 0) == 0) break; // We've reached the end of the pattern.
       if (line.rfind("<rect", 0) == 0) {
-        std::string dimensions = line.substr(line.find("width"), std::distance(line.begin() + line.find("width"), line.end()) - 3);
+        if (!dimensionsSet) {
+          std::string dimensions = line.substr(line.find("width"), std::distance(line.begin() + line.find("width"), line.end()) - 2);
+          std::stringstream ss(dimensions);
+          std::string sWidth, sHeight;
+          std::getline(ss, sWidth, ' ');
+          std::getline(ss, sHeight, ' ');
+          sWidth.pop_back();
+          sHeight.pop_back();
+          sWidth.erase(0, 7); // Remove width/height="
+          sHeight.erase(0, 8);
 
-        std::stringstream ss(dimensions);
-        std::string sWidth, sHeight;
-        std::getline(ss, sWidth, ' ');
-        std::getline(ss, sHeight, ' ');
-        sWidth.erase(sWidth.end() - sWidth.begin() - 1, 1); // Remove last "
-        sHeight.erase(sHeight.end() - sHeight.begin() - 1, 1);
-        sWidth.erase(0, 7); // Remove width/height="
-        sHeight.erase(0, 8);
+          width = std::atof(sWidth.c_str());
+          height = std::atof(sHeight.c_str());
+          dimensionsSet = true;
+        } else {
+          // <rect x="60.6" y="-168" transform="matrix(0.8678 -0.4969 0.4969 0.8678 92.9162 15.8377)" width="31.3" height="2.6"/>
+          std::string info = line.substr(line.find("x"), std::distance(line.begin() + line.find("x"), line.end()) - 2);
 
-        width = std::atof(sWidth.c_str());
-        height = std::atof(sHeight.c_str());
+          std::string dimensions = line.substr(line.find("width"), std::distance(line.begin() + line.find("width"), line.end()) - 2);
+          // TODO: make this a separate function because it is done twice.
+          std::stringstream ss(dimensions);
+          std::string sWidth, sHeight;
+          std::getline(ss, sWidth, ' ');
+          std::getline(ss, sHeight, ' ');
+          sWidth.pop_back();
+          sHeight.pop_back();
+          sWidth.erase(0, 7); // Remove width/height="
+          sHeight.erase(0, 8);
+
+          float pW = std::atof(sWidth.c_str());
+          float pH = std::atof(sHeight.c_str());
+
+          std::stringstream si(info);
+          std::string sX, sY;
+          std::getline(si, sX, ' ');
+          std::getline(si, sY, ' ');
+          sX.pop_back();
+          sY.pop_back();
+          sX.erase(0, 3); // Remove width/height="
+          sY.erase(0, 3);
+
+          float x = std::atof(sX.c_str());
+          float y = std::atof(sY.c_str());
+          std::vector<Point> points {
+            {x, y},
+            {x + pW, y},
+            {x + pW, y + pH},
+            {x, y + pH}
+          };
+
+          if (line.find("transform") != std::string::npos) {
+            std::string transform = line.substr(line.find("transform"), std::string::npos);
+            transform = transform.substr(0, transform.find("width"));
+            trim(transform);
+            transform.erase(0, std::string("transform=\"matrix(").size());
+            transform.pop_back();
+            transform.pop_back();
+
+            //a b c d e f
+            //0 1 2 3 4 5
+            float nums[6];
+
+            std::stringstream ss(transform);
+            std::string line;
+            for (signed i = 0; i < 6; ++i) {
+              std::getline(ss, line, ' ');
+              nums[i] = std::atof(line.c_str());
+            }
+            for (Point &p : points) {
+              geo::transform(p.x, p.y, nums);
+            }
+          }
+
+          polygons.push_back(points);
+        }
       } else if (line.rfind("<polygon", 0) == 0) {
         line = line.substr(line.find("points="), std::string::npos);
         line.erase(0, 8);
@@ -182,7 +264,7 @@ SVG parseSVGFile(const std::string &filename) {
         while (std::getline(ss, pair, ' ')) {
           std::string x = pair.substr(0, pair.find(","));
           std::string y = pair.substr(pair.find(",") + 1, std::string::npos);
-          polygon.push_back({ std::atof(x.c_str()), -std::atof(y.c_str()) });
+          polygon.push_back({ std::atof(x.c_str()), std::atof(y.c_str()) });
         }
 
         polygons.push_back(polygon);
@@ -206,12 +288,14 @@ SVG parseSVGFile(const std::string &filename) {
         y2s.erase(0, 4);
 
         lines.push_back({
-          { std::atof(x1s.c_str()), -std::atof(y1s.c_str())},
-          { std::atof(x2s.c_str()), -std::atof(y2s.c_str())}
+          { std::atof(x1s.c_str()), std::atof(y1s.c_str())},
+          { std::atof(x2s.c_str()), std::atof(y2s.c_str())}
         });
       } else if (line.rfind("<path", 0) == 0) {
         line = line.substr(line.find("d="), std::string::npos);
+        trim(line);
         line.erase(0, 3);
+
         if (line.find("\"/>") == std::string::npos) {
           largePathFound = true;
           pathCommands.push_back(line);
@@ -231,28 +315,36 @@ SVG parseSVGFile(const std::string &filename) {
     while (std::getline(ss, s, ' ')) {
       std::string x = s.substr(0, s.find(","));
       std::string y = s.substr(s.find(",") + 1, std::string::npos);
-      polygon.push_back({ std::atof(x.c_str()), -std::atof(y.c_str()) });
+      polygon.push_back({ std::atof(x.c_str()), std::atof(y.c_str()) });
     }
 
     polygons.push_back(polygon);
   }
 
+  std::map<char, unsigned> controlMap;
+
   for (auto p : pathCommands) {
-    Point start {-1, -1}, current;
     std::cerr << p << "\n";
+    continue;
+    Point start, current;
 
     while (p.size() > 0) {
       char control = p[0];
+      if (control == 's' || control == 'S') std::cerr << p << "\n";
       p.erase(0, 1);
+
+      if (std::isalpha(control)) {
+        if (controlMap.find(control) != controlMap.end()) {
+          controlMap[control]++;
+        } else {
+          controlMap.insert( { control, 1} );
+        }
+      }
 
       switch (control) {
         case 'M': {
           Point pair = parseTwoNumbers(p);
-          if (start.x == -1 && start.y == -1) {
-            start = current = pair;
-          } else {
-            current = pair;
-          }
+          start = current = pair;
         }
         break;
 
@@ -276,7 +368,84 @@ SVG parseSVGFile(const std::string &filename) {
         }
         break;
 
+        case 'H': {
+          float x = parseOneNumber(p);
+          Point end { x, current.y };
+          lines.push_back({
+            { current.x, current.y },
+            { end.x, end.y }
+          });
+
+          current = end;
+        }
+        break;
+
+        case 'h': {
+          float x = parseOneNumber(p);
+          Point end { current.x + x, current.y };
+          lines.push_back({
+            { current.x, current.y },
+            { end.x, end.y }
+          });
+
+          current = end;
+        }
+        break;
+
+        case 'V': {
+          float y = parseOneNumber(p);
+          Point end { current.x, y };
+          lines.push_back({
+            { current.x, current.y },
+            { end.x, end.y }
+          });
+
+          current = end;
+        }
+        break;
+
+        case 'v': {
+          float y = parseOneNumber(p);
+          Point end { current.x, current.y + y };
+          lines.push_back({
+            { current.x, current.y },
+            { end.x, end.y }
+          });
+
+          current = end;
+        }
+        break;
+
+        // This is bad
+        case 'C': {
+          if (!drawCurves) continue;
+          Point cp0 = parseTwoNumbers(p);
+          auto pairLen = pairStrLength(cp0);
+          p = p.substr(pairLen, std::string::npos);
+          if (p[0] == ',') p = p.substr(1, std::string::npos);
+          Point cp1 = parseTwoNumbers(p);
+          pairLen = pairStrLength(cp1);
+          p = p.substr(pairLen, std::string::npos);
+          if (p[0] == ',') p = p.substr(1, std::string::npos);
+          Point end = parseTwoNumbers(p);
+          pairLen = pairStrLength(end);
+
+          auto points = getBezierPoints(current, cp0, cp1, end);
+          for (size_t i = 0; i < points.size() - 1; ++i) {
+            auto p0 = points[i];
+            auto p1 = points[i + 1];
+            lines.push_back({
+              { p0.x, p0.y },
+              { p1.x, p1.y }
+            });
+          }
+
+          current = end;
+        }
+        break;
+
         case 'c': {
+          if (!drawCurves) continue;
           Point p0 = parseTwoNumbers(p);
           auto pairLen = pairStrLength(p0);
           p = p.substr(pairLen, std::string::npos);
@@ -288,16 +457,22 @@ SVG parseSVGFile(const std::string &filename) {
           Point p2 = parseTwoNumbers(p);
           pairLen = pairStrLength(p2);
 
-          Point end = current;
+          Point end { current.x, current.y };
           end += p2;
-          Point cp0 = current;
+          Point cp0 { current.x, current.y };
           cp0 += p2;
-          Point cp1 = current;
+          Point cp1 { current.x, current.y };
           cp1 += p2;
-          current += p2;
-
           auto points = getBezierPoints(current, cp0, cp1, end);
-          std::cerr << "Points " << points.size() << "\n";
+          for (size_t i = 0; i < points.size() - 1; ++i) {
+            auto p0 = points[i];
+            auto p1 = points[i + 1];
+            lines.push_back({
+              { p0.x, p0.y },
+              { p1.x, p1.y }
+            });
+          }
+          current = end;
         }
         break;
 
@@ -306,20 +481,38 @@ SVG parseSVGFile(const std::string &filename) {
             { current.x, current.y },
             { start.x, start.y }
           });
+
+          if (p.size() > 0) {
+            char next = p[0];
+            if (!(next == 'M' || next == 'm')) {
+              current = start;
+            }
+          }
         }
         break;
       }
     }
   }
 
+  for (const auto [control, value] : controlMap) {
+    std::cerr << control << " --- " << value << "\n";
+  }
+
   return { width, height, polygons, lines, pathCommands.size() };
 }
 
 int main(int argc, char **argv) {
-  // std::cerr << "Parsing SVG file " << argv[1] << "... ";
-  auto svg = parseSVGFile(argv[1]);
-  // std::cerr << "OK" << "\n";
+  bool parseCurves = true;
+
+  if (argc == 3) {
+    std::string noc { argv[2] };
+    parseCurves = !(noc == "--noc");
+  }
+
+  auto svg = parsePattern(argv[1]); /*parseSVGFile(argv[1], parseCurves);*/
+
   std::cerr << "-------------------\n";
+  std::cerr << "SVG Filename " << argv[1] << "\n";
   std::cerr << "SVG Pattern Width " << svg.width << "\n";
   std::cerr << "SVG Pattern Height " << svg.height << "\n";
   std::cerr << "SVG Polygon Count " << svg.polygons.size() << "\n";
@@ -330,26 +523,12 @@ int main(int argc, char **argv) {
   return 0;
 
   HEADER();
-  for (auto p : svg.polygons) {
-    POLYLINE();
-    for (const auto [x, y] : p) {
-      VERTEX(x, y);
-    }
 
-    SEQEND();
-  }
+  unsigned ph = 3;
+  unsigned pw = 3;
 
-  for (const auto [p1, p2] : svg.lines) {
-    const auto [x1, y1] = p1;
-    const auto [x2, y2] = p2;
-    LINE(x1, y1, x2, y2);
-    SEQEND();
-  }
-
-  unsigned SIZE = 5;
-
-  for (int h = 0; h < SIZE; ++h) {
-    for (int w = 0; w < SIZE*2; ++w) {
+  for (int h = 0; h < ph; ++h) {
+    for (int w = 0; w < pw; ++w) {
       for (auto p : svg.polygons) {
         POLYLINE();
         for (const auto [x, y] : p) {

@@ -1,6 +1,10 @@
 #ifndef GEO_HH
 #define GEO_HH
 
+#include <bitset>
+#include <iostream>
+#include <vector>
+
 struct Point {
   float x, y;
 
@@ -10,8 +14,12 @@ struct Point {
   }
 
   bool operator ==(const Point &p) {
-    return std::abs(x - p.x) < std::numeric_limits<float>::epsilon()
-        && std::abs(y - p.y) < std::numeric_limits<float>::epsilon();
+    std::bitset<32> px(x);
+    std::bitset<32> py(y);
+    std::bitset<32> endx(p.x);
+    std::bitset<32> endy(p.y);
+
+    return (px == endx) && (py == endy);
   }
 
   bool operator !=(const Point &p) {
@@ -20,7 +28,19 @@ struct Point {
 
   void operator *=(float f) {
     x *= f;
-    y *= y;
+    y *= f;
+  }
+
+  bool operator <=(const Point &p) {
+    return x <= p.x && y <= p.y;
+  }
+
+  bool operator <(const Point &p) {
+    return x < p.x && y < p.y;
+  }
+
+  bool operator >(const Point &p) {
+    return x > p.x && y > p.y;
   }
 
   friend std::ostream& operator<<(std::ostream &os, const Point &p) {
@@ -31,5 +51,12 @@ struct Point {
 
 typedef std::vector<std::vector<Point>> Polygon;
 typedef std::vector<std::pair<Point, Point>> Line;
+
+namespace geo {
+  static void transform(float &x, float &y, const float nums[6]) {
+    x = nums[0]*x + nums[2]*y + nums[4];
+    y = nums[1]*x + nums[3]*y + nums[5];
+  }
+}
 
 #endif
