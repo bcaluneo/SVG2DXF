@@ -27,10 +27,11 @@ static void trim(std::string &s) {
 }
 
 SVG parsePattern(const std::string &filename);
-void parsePolygons(std::vector<Polygon> &polygons);
-void parseLines(std::vector<Line> &lines);
-void parseRects(std::vector<Polygon> &polygons);
-void parsePaths(std::vector<Line> &lines);
-ValueMap parseKeys(std::string &line);
+void parsePolygons(const std::string &line, std::vector<Polygon> &polygons);
+void parseLines(const std::string &line, std::vector<Line> &lines);
+void parseRects(const std::string &line, std::vector<Polygon> &polygons);
+void parsePaths(const std::string &line, std::vector<Line> &lines);
+ValueMap parse(std::string &line);
+std::vector<float> strVec2FVec(const std::vector<std::string> &vector);
 
 #endif

@@ -7,47 +7,54 @@ SVG parsePattern(const std::string &filename) {
 
   std::ifstream infile(filename);
   std::string line, currentLine;
+  std::vector<std::string> linesToParse;
 
+  bool multiline = false;
+  std::string currentKey = "";
   while (std::getline(infile, line)) {
-    std::cerr << "*********************************\n";
     trim(line);
-
-    if (line.find(">") == std::string::npos) {
-      // Handle multi line code.
-    } else {
-      auto map = parseKeys(line);
-      for (const auto [k, v] : map) {
-        std::cerr << k << "\n";
-        for (auto s : v) {
-          std::cerr << "\t" << s << "\n";
-        }
-        std::cerr << "-------------\n";
-      }
+    auto key = line.substr(1, line.find(" "));
+    if (key[0] == '!') continue; // ignore comments
+    if (currentKey != "") {
+      linesToParse.back() += " " + line;
+      currentKey = line.find(">") == std::string::npos ? key : "";
+      continue;
     }
 
-    std::cerr << "*********************************\n";
+    currentKey = line.find(">") == std::string::npos ? key : "";
+    linesToParse.push_back(line);
   }
+
+  for (auto line : linesToParse) {
+    auto map = parse(line);
+    if (map.size() == 0) continue;
+    auto key = line.substr(1, line.find(" ") - 1);
+    if (key == "pattern") {
+      width = std::atof(map["width"][0].c_str());
+      height = std::atof(map["height"][0].c_str());
+    }
+  }
+
 
   return { width, height, polygons, lines };
 }
 
-void parsePolygons(std::vector<Polygon> &polygons) {
+void parsePolygons(const std::vector<std::string> &points, std::vector<Polygon> &polygons) {
+}
+
+void parseLines(const std::vector<std::string> &points, std::vector<Line> &lines) {
 
 }
 
-void parseLines(std::vector<Line> &lines) {
+void parseRects(const std::vector<std::string> &points, std::vector<Polygon> &polygons) {
 
 }
 
-void parseRects(std::vector<Polygon> &polygons) {
+void parsePaths(const std::vector<std::string> &points, std::vector<Line> &lines) {
 
 }
 
-void parsePaths(std::vector<Line> &lines) {
-
-}
-
-ValueMap parseKeys(std::string &line) {
+ValueMap parse(std::string &line) {
   ValueMap result;
 
   std::stringstream ss(line);
@@ -79,6 +86,18 @@ ValueMap parseKeys(std::string &line) {
       } else keyString.pop_back();
       keyString.erase(0, key.size() + 2);
       result[key].push_back(keyString);
+    }
+  }
+
+  return result;
+}
+
+std::vector<float> strVec2FVec(const std::vector<std::string> &vector) {
+  std::vector<float> result;
+  for (auto s : vector) {
+    std::stringstream ss(s);
+    while (std::getline(ss, s, ',')) {
+      result.push_back(std::atof(s.c_str()));
     }
   }
 

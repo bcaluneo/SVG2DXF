@@ -105,21 +105,10 @@ auto pairStrLength(Point p) {
   bool xNeedsFraction = std::abs(((float) ((int) std::abs(p.x))) - std::abs(p.x)) > std::numeric_limits<float>::epsilon();
   bool yNeedsFraction = std::abs(((float) ((int) std::abs(p.y))) - std::abs(p.y)) > std::numeric_limits<float>::epsilon();
 
-  if (xNeedsFraction) {
-    stream << std::fixed << std::setprecision(1) << p.x;
-  } else {
-    stream << std::fixed << std::setprecision(0) << p.x;
-  }
-
+  stream << std::fixed << std::setprecision(xNeedsFraction ? 1 : 0) << p.x;
   result += stream.str().size();
   stream.str("");
-
-  if (yNeedsFraction) {
-    stream << std::fixed << std::setprecision(1) << p.y;
-  } else {
-    stream << std::fixed << std::setprecision(0) << p.y;
-  }
-
+  stream << std::fixed << std::setprecision(yNeedsFraction ? 1 : 0) << p.y;
   result += stream.str().size();
 
   if (p.y > 0) result += 1;
@@ -498,7 +487,7 @@ SVG parseSVGFile(const std::string &filename, bool drawCurves) {
     std::cerr << control << " --- " << value << "\n";
   }
 
-  return { width, height, polygons, lines, pathCommands.size() };
+  return { width, height, polygons, lines };
 }
 
 int main(int argc, char **argv) {
@@ -517,7 +506,6 @@ int main(int argc, char **argv) {
   std::cerr << "SVG Pattern Height " << svg.height << "\n";
   std::cerr << "SVG Polygon Count " << svg.polygons.size() << "\n";
   std::cerr << "SVG Line Count " << svg.lines.size() << "\n";
-  std::cerr << "SVG Path Count " << svg.pathCount << "\n";
   std::cerr << "-------------------\n";
 
   return 0;
