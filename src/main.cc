@@ -230,9 +230,9 @@ SVG parseSVGFile(const std::string &filename, bool drawCurves) {
               std::getline(ss, line, ' ');
               nums[i] = std::atof(line.c_str());
             }
-            for (Point &p : points) {
-              geo::transform(p.x, p.y, nums);
-            }
+            // for (Point &p : points) {
+            //   geo::transform(p.x, p.y, nums);
+            // }
           }
 
           polygons.push_back(points);

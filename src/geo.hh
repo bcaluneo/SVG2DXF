@@ -53,9 +53,9 @@ typedef std::vector<std::vector<Point>> Polygon;
 typedef std::vector<std::pair<Point, Point>> Line;
 
 namespace geo {
-  static void transform(float &x, float &y, const float nums[6]) {
-    x = nums[0]*x + nums[2]*y + nums[4];
-    y = nums[1]*x + nums[3]*y + nums[5];
+  static void transform(float &x, float &y, const std::vector<float> &matrix) {
+    x = matrix[0]*x + matrix[2]*y + matrix[4];
+    y = matrix[1]*x + matrix[3]*y + matrix[5];
   }
 }
 
