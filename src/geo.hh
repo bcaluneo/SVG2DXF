@@ -4,6 +4,7 @@
 #include <bitset>
 #include <iostream>
 #include <vector>
+#include <cmath>
 
 struct Point {
   float x, y;
@@ -11,6 +12,10 @@ struct Point {
   void operator +=(const Point &p) {
     x += p.x;
     y += p.y;
+  }
+
+  float distance(const Point &p) {
+    return std::sqrt(std::pow(p.x - x, 2) + std::pow(p.y - y, 2));
   }
 
   bool operator ==(const Point &p) {
@@ -29,6 +34,11 @@ struct Point {
   void operator *=(float f) {
     x *= f;
     y *= f;
+  }
+
+  void operator -=(const Point &p) {
+    x -= p.x;
+    y -= p.y;
   }
 
   bool operator <=(const Point &p) {
