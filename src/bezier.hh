@@ -4,10 +4,9 @@
 #include <cmath>
 
 // p = (1-t)^3 *P0 + 3*t*(1-t)^2*P1 + 3*t^2*(1-t)*P2 + t^3*P3
-static auto getBezierPoints(Point start, Point cp0, Point cp1, Point end) {
+inline auto getBezierPoints(Point start, Point cp0, Point cp1, Point end) {
   std::vector<Point> result { start };
 
-  Point current;
   float t = 0.0;
   while (t <= 1) {
     t += 1 / std::abs(cp0.distance(cp1));

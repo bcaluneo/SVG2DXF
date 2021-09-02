@@ -1,6 +1,18 @@
+// Copyright (C) Brendan Caluneo
+
 #include "parser.hh"
 
-SVG parsePattern(const std::string &filename) {
+void trim(std::string &s) {
+  s.erase(s.begin(), std::find_if(s.begin(), s.end(), [](unsigned char ch) {
+    return !std::isspace(ch);
+  }));
+
+  s.erase(std::find_if(s.rbegin(), s.rend(), [](unsigned char ch) {
+    return !std::isspace(ch);
+  }).base(), s.end());
+}
+
+SVG parseFile(const std::string &filename) {
   Polygon polygons;
   Line lines;
   float width = 0, height = 0;
@@ -9,7 +21,6 @@ SVG parsePattern(const std::string &filename) {
   std::string line, currentLine;
   std::vector<std::string> linesToParse;
 
-  bool multiline = false;
   std::string currentKey = "";
   while (std::getline(infile, line)) {
     trim(line);
@@ -190,7 +201,7 @@ void parsePaths(const std::vector<std::string> &lines, Line &svgLines) {
 
         if (prevCommandCurve) {
           cp0 = current;
-          cp0 *= 3;
+          cp0 *= 2;
           cp0 -= prevControlPoint;
         } else { cp0 = current; }
 

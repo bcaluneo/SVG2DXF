@@ -1,12 +1,6 @@
+// Copyright (C) Brendan Caluneo
+
 #include <iostream>
-#include <cstring>
-#include <fstream>
-#include <sstream>
-#include <vector>
-#include <algorithm>
-#include <iomanip>
-#include <sstream>
-#include <map>
 
 #include "dxf.hh"
 #include "geo.hh"
@@ -14,13 +8,25 @@
 #include "parser/parser.hh"
 
 int main(int argc, char **argv) {
-  if (argc < 2) {
-    std::cerr << "Usage: svg2dxf [SVG FILE] > [OUTPUT]\n";
+  if (argc < 2 || argc == 3) {
+    std::cerr << "Usage: svg2dxf -s [SIZE] [SVG FILE] > [OUTPUT]\n";
     return 0;
   }
 
-  std::cerr << "Parsing " << argv[1] << "... ";
-  auto svg = parsePattern(argv[1]); /*parseSVGFile(argv[1], parseCurves);*/
+  unsigned size = 0;
+  std::string fileName = "";
+  if (argc == 4) {
+    size = std::atof(argv[2]);
+    fileName = argv[3];
+  } else {
+    size = 1;
+    fileName = argv[1];
+  }
+
+  std::cerr << "Parsing " << fileName << "... ";
+  // This doesn't actually return any errors, so having it print OK afterwards
+  // doesn't really make sense.
+  auto svg = parseFile(argv[1]); /*parseSVGFile(argv[1], parseCurves);*/
   std::cerr << "OK\n";
 
   // std::cerr << "-------------------\n";
@@ -33,11 +39,8 @@ int main(int argc, char **argv) {
 
   HEADER();
 
-  unsigned ph = 1;
-  unsigned pw = 1;
-
-  for (int h = 0; h < ph; ++h) {
-    for (int w = 0; w < pw; ++w) {
+  for (unsigned h = 0; h < size; ++h) {
+    for (unsigned w = 0; w < size; ++w) {
       for (auto p : svg.polygons) {
         POLYLINE();
         for (const auto [x, y] : p) {

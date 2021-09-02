@@ -1,3 +1,5 @@
+// Copyright (C) Brendan Caluneo
+
 #ifndef GEO_HH
 #define GEO_HH
 
@@ -7,7 +9,7 @@
 #include <cmath>
 
 struct Point {
-  float x, y;
+  double x, y;
 
   void operator +=(const Point &p) {
     x += p.x;
@@ -19,12 +21,8 @@ struct Point {
   }
 
   bool operator ==(const Point &p) {
-    std::bitset<32> px(x);
-    std::bitset<32> py(y);
-    std::bitset<32> endx(p.x);
-    std::bitset<32> endy(p.y);
-
-    return (px == endx) && (py == endy);
+    return std::abs(x - p.x) < std::numeric_limits<double>::epsilon() &&
+           std::abs(y - p.y) < std::numeric_limits<double>::epsilon();
   }
 
   bool operator !=(const Point &p) {
@@ -59,11 +57,12 @@ struct Point {
   }
 };
 
+// The naming of these don't really make sense.
 typedef std::vector<std::vector<Point>> Polygon;
 typedef std::vector<std::pair<Point, Point>> Line;
 
 namespace geo {
-  static void transform(float &x, float &y, const std::vector<float> &matrix) {
+  inline void transform(double &x, double &y, const std::vector<float> &matrix) {
     x = matrix[0]*x + matrix[2]*y + matrix[4];
     y = matrix[1]*x + matrix[3]*y + matrix[5];
   }

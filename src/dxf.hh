@@ -5,6 +5,7 @@
 
 // Some macros for writing DXF files.
 // These are from the spec found here: https://images.autodesk.com/adsk/files/autocad_2012_pdf_dxf-reference_enu.pdf
+// These macros write to standard output.
 
 #define POLYLINE() std::cout << "\t0\nPOLYLINE\n\t8\n0\n\t70\n1\n";
 #define VERTEX(x, y) std::cout << "\t0\nVERTEX\n\t10\n" << x << "\n\t20\n" << y << "\n";
